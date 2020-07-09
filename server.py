@@ -6,7 +6,7 @@ import json
 
 app = Flask(__name__)
 
-topics = []
+topics = ["default"]
 
 '''
 Key: user
@@ -36,29 +36,68 @@ def calc():
     for user in user_prefs:
         for pref in user_prefs[user]:
             if pref["importance"] > 0:
-                topic_to_user[pref["topic"]].append(user)
+                if pref["topic"] in topics:
+                    topic_to_user[pref["topic"]].append(user)
+    pprint("topic to user")
+    pprint(topic_to_user)
     problem = Problem()
-    problem.addVariables(range(0,16),range(0,len(topic_to_user)))
-'''
-    for i in range(5):
-        f = lambda x : constraint(topics.)
-        problem.addConstraint()
-''' 
-    return json.dumps(topic_to_user)
+    topic_idxs = range(0,len(topic_to_user))
+    pprint("topic_idxs")
+    pprint(topic_idxs)
+    problem.addVariables(range(0,15),topic_idxs)
 
-def constraint(topics, topic_dict):
-    users = topic_dict.items()
-    sets = iter(map(set, users))
-    result = sets.next()
-    for s in sets:
-        result = result.intersection(s) 
-    return len(result) == 0
+    problem.addConstraint(MaxSumConstraint(sum(topic_idxs)))
+    problem.addConstraint(MinSumConstraint(sum(topic_idxs)))
+    g = lambda *v: all_in_range_once(topic_idxs, v)
+    problem.addConstraint(g)
+    for row in range(5):
+        idxs = [row * 3 + i for i in range(3)]
+        f = lambda a, b, c: constraint(a, b, c, topic_to_user)
+        problem.addConstraint(f, idxs)
     
-@app.route('/ser_prefs', methods = ['POST', 'GET'])
+    pprint(problem.getSolution())
+    return json.dumps(problem.getSolution())
+
+def constraint(a, b, c, topic_dict):
+    if (a != 0 and b != 0) and a==b:
+        return False
+    if (b != 0 and c != 0) and b==c:
+        return False
+    if (a != 0 and c != 0) and a==c:
+        return False
+    aa = set(topic_dict[topics[a]])
+    bb = set(topic_dict[topics[b]])
+    cc = set(topic_dict[topics[c]])
+
+    if len(aa.intersection(bb)) > 0:
+        return False
+    if len(aa.intersection(cc)) > 0:
+        return False
+    if len(cc.intersection(bb)) > 0:
+        return False
+    return True
+
+def all_in_range_once(r, *values):
+    seen = [False for i in r]
+    seen[0] = True
+    #pprint(values)
+    for v in list(values[0]):
+        if v == 0:
+            continue
+        if seen[v]:
+            return False
+        else:
+            seen[v] = True
+    return all(seen)
+
+
+    
+@app.route('/user_prefs', methods = ['POST', 'GET'])
 def post_user_pref():
     if request.method == 'POST':
-        up=request.json
-        user_prefs[up["user"]]=up["prefs"]
+        up = request.json
+        user = list(up.keys())[0]
+        user_prefs[user]=up[user]
         return ''
     if request.method == 'GET':
         return json.dumps(user_prefs)
